@@ -1,7 +1,9 @@
 
+using Discord;
 using Discord.Interactions;
-using RS3ClanHelper.Services;
 using RS3ClanHelper.Models;
+using RS3ClanHelper.Services;
+using System.Text;
 
 namespace RS3ClanHelper.Modules
 {
@@ -30,5 +32,21 @@ namespace RS3ClanHelper.Modules
             _store.Save("botconfig.json", cfg);
             await RespondAsync("✅ Settings updated.", ephemeral:true);
         }
+        [SlashCommand("export", "Export Discord → RSN mappings / roster skeleton as CSV")]
+        [DefaultMemberPermissions(GuildPermission.Administrator)]
+        public async Task ExportAsync()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("DiscordId,Username,Nickname");
+            foreach (var u in Context.Guild.Users)
+            {
+                var username = (u.Username ?? "").Replace("\"", "\"\"");
+                var nickname = (u.Nickname ?? "").Replace("\"", "\"\"");
+                sb.AppendLine($"{u.Id},\"{username}\",\"{nickname}\"");
+            }
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            await RespondWithFileAsync(new MemoryStream(bytes), "discord_roster.csv", "CSV export created.");
+        }
+
     }
 }

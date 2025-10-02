@@ -1,4 +1,3 @@
-
 using Discord.Interactions;
 using RS3ClanHelper.Services;
 using RS3ClanHelper.Models;
@@ -10,25 +9,41 @@ namespace RS3ClanHelper.Modules
     {
         private readonly IClanApiClient _clan;
         private readonly SnapshotService _snapshots;
-        public LookupModule(IClanApiClient clan, SnapshotService snaps) { _clan = clan; _snapshots = snaps; }
+        private readonly StorageService _store;
 
-        [SlashCommand("member", "Look up a clan member by RSN")]  // becomes /lookup member <rsn>
-        public async Task LookupAsync([Summary(description: "RuneScape Name")] string rsn)
+        public LookupModule(IClanApiClient clan, SnapshotService snaps, StorageService store)
         {
-            var roster = await _clan.FetchClanAsync("{clanName}");
-            if (roster == null) { await RespondAsync("Clan roster unavailable."); return; }
-            var m = roster.Members.FirstOrDefault(x => string.Equals(x.DisplayName, rsn, StringComparison.OrdinalIgnoreCase));
-            if (m == null) { await RespondAsync($"No member named **{rsn}** found."); return; }
-            await RespondAsync($"**{m.DisplayName}** — Rank: **{m.Rank}**, Clan XP: **{m.ClanXp:N0}**, Clan Kills: **{m.ClanKills:N0}**");
+            _clan = clan;
+            _snapshots = snaps;
+            _store = store;
         }
 
-        [SlashCommand("top_xp", "Top XP gainers in the last N days")]
-        public async Task TopXpAsync([Summary(description:"Days window")] int days = 7)
+        [SlashCommand("member", "Look up a clan member by RSN")]
+        public async Task LookupAsync(string rsn)
         {
-            var gains = _snapshots.ComputeGains(TimeSpan.FromDays(days)).Take(10).ToList();
-            if (gains.Count == 0) { await RespondAsync("No gains recorded in that window yet."); return; }
-            var lines = gains.Select((g,i)=> $"`{i+1:00}` **{g.Rsn}** +{g.Gain:N0} XP since {g.Since:u}");
-            await RespondAsync(string.Join("\n", lines));
+            // load config to get the connected clan name
+            var cfg = _store.Load<BotConfig>("botconfig.json");
+            if (string.IsNullOrWhiteSpace(cfg.ClanName))
+            {
+                await RespondAsync("❌ No clan is configured. Use `/admin settings clan <ClanName>` first.");
+                return;
+            }
+
+            var roster = await _clan.FetchClanAsync(cfg.ClanName);
+            if (roster == null)
+            {
+                await RespondAsync($"❌ Could not fetch clan members for **{cfg.ClanName}**.");
+                return;
+            }
+
+            var m = roster.Members
+                          .FirstOrDefault(x => string.Equals(x.DisplayName, rsn,
+                              StringComparison.OrdinalIgnoreCase));
+
+            if (m == null)
+                await RespondAsync($"No member named **{rsn}** found in {cfg.ClanName}.");
+            else
+                await RespondAsync($"**{m.DisplayName}** — Rank: **{m.Rank}**, Clan XP: **{m.ClanXp:N0}**, Clan Kills: **{m.ClanKills:N0}**");
         }
     }
 }
