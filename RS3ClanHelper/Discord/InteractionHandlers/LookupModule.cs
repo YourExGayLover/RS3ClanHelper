@@ -1,6 +1,8 @@
 using Discord.Interactions;
 using RS3ClanHelper.Services;
 using RS3ClanHelper.Models;
+using System.Globalization;
+using System.Text;
 
 namespace RS3ClanHelper.Modules
 {
@@ -21,7 +23,6 @@ namespace RS3ClanHelper.Modules
         [SlashCommand("member", "Look up a clan member by RSN")]
         public async Task LookupAsync(string rsn)
         {
-            // load config to get the connected clan name
             var cfg = _store.Load<BotConfig>("botconfig.json");
             if (string.IsNullOrWhiteSpace(cfg.ClanName))
             {
@@ -36,14 +37,38 @@ namespace RS3ClanHelper.Modules
                 return;
             }
 
-            var m = roster.Members
-                          .FirstOrDefault(x => string.Equals(x.DisplayName, rsn,
-                              StringComparison.OrdinalIgnoreCase));
+            // Normalization (spaces/underscores, diacritics, lowercase)
+            string Normalize(string s) =>
+                string.IsNullOrEmpty(s) ? "" :
+                new string(s.Trim()
+                             .Replace('\u00A0', ' ')
+                             .Normalize(NormalizationForm.FormKC)
+                             .ToLowerInvariant()
+                             .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                             .ToArray());
 
-            if (m == null)
-                await RespondAsync($"No member named **{rsn}** found in {cfg.ClanName}.");
-            else
-                await RespondAsync($"**{m.DisplayName}** — Rank: **{m.Rank}**, Clan XP: **{m.ClanXp:N0}**, Clan Kills: **{m.ClanKills:N0}**");
+            var target = Normalize(rsn);
+            var targetSpacesToUnders = target.Replace(" ", "_");
+            var targetUndersToSpaces = target.Replace("_", " ");
+
+            ClanMember? found =
+                roster.Members.FirstOrDefault(m => Normalize(m.DisplayName) == target) ??
+                roster.Members.FirstOrDefault(m =>
+                {
+                    var dn = Normalize(m.DisplayName);
+                    return dn.Replace(" ", "_") == targetSpacesToUnders ||
+                           dn.Replace("_", " ") == targetUndersToSpaces;
+                }) ??
+                roster.Members.FirstOrDefault(m =>
+                    string.Equals(m.DisplayName?.Trim(), rsn.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (found == null)
+            {
+                await RespondAsync($"No member named **{rsn}** found in **{cfg.ClanName}**.");
+                return;
+            }
+
+            await RespondAsync($"**{found.DisplayName}** — Rank: **{found.Rank}**, Clan XP: **{found.ClanXp:N0}**, Clan Kills: **{found.ClanKills:N0}**");
         }
     }
 }
