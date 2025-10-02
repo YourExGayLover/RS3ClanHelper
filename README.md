@@ -35,3 +35,29 @@ It uses the official RS3 `members_lite.ws` API to fetch clan data and provides s
    ```bash
    git clone https://github.com/YOUR-USERNAME/rs3-clan-role-sync-bot.git
    cd rs3-clan-role-sync-bot
+
+
+## New Features
+- /clan lookup <rsn>
+- Inactive tracker
+- XP leaderboards via snapshots
+- Role sync on join & nickname sync
+- Event creation & RSVP
+- Settings command and CSV export
+- Alias support scaffolding
+- Optional RuneMetrics notifications (stub)
+
+
+## Command Map (Option A layout)
+
+Top-level commands are unique to avoid Discord's `APPLICATION_COMMANDS_DUPLICATE_NAME` error.
+
+- `/clan ...` — existing clan management commands
+- `/lookup member <rsn>` — quick member lookup by RSN
+- `/lookup top_xp [days]` — XP leaderboard window (default 7 days)
+- `/admin settings [option] [value]` — view/update bot settings (clan name, auto-nick, etc.)
+- `/admin export` — CSV export of Discord users (DiscordId, Username, Nickname)
+
+### Notes
+- If you previously had multiple modules using `[Group("clan", ...)]`, they were split into unique groups (`lookup`, `admin`) to comply with Discord's rule that **top-level command names must be unique**.
+- The XP leaderboard uses cached snapshots. Schedule periodic snapshots (hourly/daily) to populate data.
