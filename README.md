@@ -35,3 +35,14 @@ It uses the official RS3 `members_lite.ws` API to fetch clan data and provides s
    ```bash
    git clone https://github.com/YOUR-USERNAME/rs3-clan-role-sync-bot.git
    cd rs3-clan-role-sync-bot
+
+
+## New Features
+- /clan lookup <rsn>
+- Inactive tracker
+- XP leaderboards via snapshots
+- Role sync on join & nickname sync
+- Event creation & RSVP
+- Settings command and CSV export
+- Alias support scaffolding
+- Optional RuneMetrics notifications (stub)
