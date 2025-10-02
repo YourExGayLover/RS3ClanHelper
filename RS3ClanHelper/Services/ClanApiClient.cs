@@ -30,7 +30,21 @@ namespace RS3ClanHelper.Services
                     var rank = cells[1].Trim();
                     long.TryParse(cells[2], out var xp);
                     long.TryParse(cells[3], out var kills);
-                    members.Add(new ClanMember(name, rank, xp, kills));
+                    DateTimeOffset? join = null;
+                    if (cells.Length >= 5)
+                    {
+                        var raw = cells[4]?.Trim();
+                        if (!string.IsNullOrEmpty(raw))
+                        {
+                            // try common formats
+                            string[] formats = new[] { "yyyy-MM-dd", "MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-ddTHH:mm:ssK" };
+                            if (DateTimeOffset.TryParseExact(raw, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
+                                join = dt;
+                            else if (DateTimeOffset.TryParse(raw, out var dt2))
+                                join = dt2;
+                        }
+                    }
+                    members.Add(new ClanMember(name, rank, xp, kills, join));
                 }
                 return new ClanRoster(clanName, members);
             }
