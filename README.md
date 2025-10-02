@@ -1,63 +1,67 @@
 # RS3 Clan Role Sync Bot
 
-A Discord bot written in **C# / .NET 8** that syncs RuneScape 3 clan ranks with Discord roles.  
-It uses the official RS3 `members_lite.ws` API to fetch clan data and provides slash commands to manage, audit, and synchronize Discord roles with clan ranks.
+A Discord bot written in C# / .NET 8 that syncs RuneScape 3 clan ranks with Discord roles. It fetches your clan roster and provides tools to audit & sync roles, schedule automatic updates, and track member activity.
 
 ---
 
 ## ✨ Features
-- 🔗 **/clan connect `<ClanName>`** – Link your Discord server to an RS3 clan.  
-- 🛡️ **/clan create_rank_roles** – Auto-create all RS3 rank roles.  
-- 👤 **/clan set_rsn `@User RSN`** – Link a Discord user to their RuneScape Name.  
-- 📊 **/clan audit_roles** – Show mismatches between Discord and clan ranks, with option to apply fixes.  
-- ⚡ **/clan sync_now** – Immediately update Discord roles to match clan ranks.  
-- ⏰ **/clan schedule_sync `<hours>` [#channel]** – Schedule automatic syncs every N hours, with optional summary posts.  
-- ⏹️ **/clan stop_sync** – Cancel scheduled syncs.  
-- 📣 **/clan ping_unmatched [#channel] [message]** – Mention users not found in the clan roster and prompt them to update their display names.
+
+- **Clan ↔ Discord role sync**
+  - Link a Discord server to an RS3 clan and keep rank roles up to date.
+  - Create standard RS3 rank roles with one command.
+  - Audit vs. apply changes, or schedule periodic syncs with optional summaries.
+  - Ping unmatched users so they can fix their display names or set their RSN.
+- **Member tools**
+  - Quick **member lookup** (overall rank & total XP from hiscores; clan data if available from roster).
+  - **XP/Activity leaderboards** for configurable time spans.
+  - **Inactive tracker**: weekly posts tagging members who haven’t gained XP in N days.
+  - Manual **snapshots** to seed/refresh XP tracking.
 
 ---
 
-## 📋 Requirements
-- .NET 8 SDK  
-- A Discord bot application with:
-  - **Bot Token** (from [Discord Developer Portal](https://discord.com/developers/applications))  
-  - **Privileged Gateway Intents → Server Members** enabled  
-  - Invited with permissions:  
-    - Manage Roles  
-    - Read Messages/View Channels  
-    - Send Messages  
-    - Use Slash Commands  
+## 🧭 Slash Commands
+
+### `/clan …` (server admin)
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `/clan connect` | `<ClanName>` | Link this Discord server to the named RS3 clan. |
+| `/clan create_rank_roles` | — | Create standard RS3 rank roles in the server. |
+| `/clan set_rsn` | `@User` `RSN` | Link a Discord user to their RuneScape name for reliable matching. |
+| `/clan audit_roles` | — | Show deltas between Discord roles and clan ranks (dry-run). |
+| `/clan sync_now` | — | Immediately apply role updates. |
+| `/clan schedule_sync` | `<hours>` `[summary_channel]` | Schedule a sync every N hours; optionally post a summary. |
+| `/clan stop_sync` | — | Stop the scheduled sync task. |
+| `/clan ping_unmatched` | `[channel]` `[message]` | Mention users not found in the roster with a custom message. |
+
+### `/member …` (member utilities)
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `/member lookup` | `<rsn>` | Lookup a RuneScape name: overall rank & total XP (hiscores), clan rank/XP/kills/join date (if roster provides them). |
+| `/member top_xp` | `[days=7]` | Show the top XP gainers over the last N days (default 7). |
+| `/member set_inactive_config` | `<days>` `<channel>` `[summary_day]` `[hour]` | Configure inactive-member summary (0 XP gain for N days) and post channel. |
+| `/member snapshot_now` | — | Take an XP snapshot immediately. |
+
+---
+
+## ⚙️ Requirements
+
+- **.NET 8 SDK**
+- Discord application & bot token
+- Privileged intent: **Server Members**
+- Permissions:
+  - Manage Roles
+  - Read/View Channels
+  - Send Messages
+  - Use Slash Commands
+- Ensure the bot’s role is above RS3 rank roles in your Discord role list.
 
 ---
 
 ## 🚀 Setup
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/rs3-clan-role-sync-bot.git
-   cd rs3-clan-role-sync-bot
 
-
-## New Features
-- /clan lookup <rsn>
-- Inactive tracker
-- XP leaderboards via snapshots
-- Role sync on join & nickname sync
-- Event creation & RSVP
-- Settings command and CSV export
-- Alias support scaffolding
-- Optional RuneMetrics notifications (stub)
-
-
-## Command Map (Option A layout)
-
-Top-level commands are unique to avoid Discord's `APPLICATION_COMMANDS_DUPLICATE_NAME` error.
-
-- `/clan ...` — existing clan management commands
-- `/lookup member <rsn>` — quick member lookup by RSN
-- `/lookup top_xp [days]` — XP leaderboard window (default 7 days)
-- `/admin settings [option] [value]` — view/update bot settings (clan name, auto-nick, etc.)
-- `/admin export` — CSV export of Discord users (DiscordId, Username, Nickname)
-
-### Notes
-- If you previously had multiple modules using `[Group("clan", ...)]`, they were split into unique groups (`lookup`, `admin`) to comply with Discord's rule that **top-level command names must be unique**.
-- The XP leaderboard uses cached snapshots. Schedule periodic snapshots (hourly/daily) to populate data.
+```bash
+git clone https://github.com/YourExGayLover/RS3ClanHelper.git
+cd RS3ClanHelper/RS3ClanHelper
+dotnet build
