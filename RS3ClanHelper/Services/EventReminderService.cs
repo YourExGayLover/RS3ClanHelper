@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
@@ -48,20 +48,58 @@ namespace RS3ClanHelper.Services
                                     evt.Reminded1h = true;
                                     await _store.SaveAsync(evt);
                                 }
-                                // NEW: 15m reminder
+                                // 15m reminder — ping Yes (+ Maybe if you want)
                                 if (!evt.Reminded15m && minutesUntil <= 15 && minutesUntil > 13)
                                 {
-                                    await ch.SendMessageAsync($":alarm_clock: **15m Reminder:** **{evt.Title}** starts <t:{evt.StartsAt.ToUnixTimeSeconds()}:R>. Get ready!");
+                                    var userIds = evt.Yes
+                                        // .Concat(evt.Maybe) // ← uncomment to also ping "Maybe"
+                                        .Distinct()
+                                        .ToList();
+
+                                    if (userIds.Count > 0)
+                                    {
+                                        var mentions = string.Join(" ", userIds.Select(MentionUtils.MentionUser));
+                                        var content = $"{mentions} :alarm_clock: **15m Reminder:** **{evt.Title}** starts <t:{evt.StartsAt.ToUnixTimeSeconds()}:R>. Get ready!";
+
+                                        var allowed = new AllowedMentions
+                                        {
+                                            // Leave AllowedTypes unset; allow only these ids:
+                                            UserIds = userIds
+                                        };
+
+                                        await ch.SendMessageAsync(content, allowedMentions: allowed);
+                                    }
+
                                     evt.Reminded15m = true;
                                     await _store.SaveAsync(evt);
                                 }
-                                // NEW: start announcement (0m)
+
+                                // Start announcement (0m) — ping Yes (+ Maybe if you want)
                                 if (!evt.RemindedStart && minutesUntil <= 0 && minutesUntil > -2)
                                 {
-                                    await ch.SendMessageAsync($":tada: **{evt.Title}** is starting now!");
+                                    var userIds = evt.Yes
+                                        // .Concat(evt.Maybe) // ← optional
+                                        .Distinct()
+                                        .ToList();
+
+                                    if (userIds.Count > 0)
+                                    {
+                                        var mentions = string.Join(" ", userIds.Select(MentionUtils.MentionUser));
+                                        var content = $"{mentions} :tada: **{evt.Title}** is starting now!";
+
+                                        var allowed = new AllowedMentions
+                                        {
+                                            UserIds = userIds
+                                        };
+
+                                        await ch.SendMessageAsync(content, allowedMentions: allowed);
+                                    }
+
                                     evt.RemindedStart = true;
                                     await _store.SaveAsync(evt);
                                 }
+
+
                             }
                             catch { /* keep loop alive */ }
                         }

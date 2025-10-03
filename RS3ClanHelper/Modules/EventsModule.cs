@@ -52,7 +52,7 @@ namespace RS3ClanHelper.Modules
             var msg = await ch.SendMessageAsync(embed: embed, components: row);
             evt.MessageId = msg.Id;
 
-            // ---- Create native Discord Scheduled Event (External) ----
+            // ---- Create native Discord Scheduled Event (External) (if the bot has Manage Events) ----
             var start = evt.StartsAt;
             DateTimeOffset end;
             if (!string.IsNullOrWhiteSpace(end_time) && TryParseDate(end_time, out var parsedEnd))
@@ -71,21 +71,43 @@ namespace RS3ClanHelper.Modules
                 eventDescription += "\n\n";
             eventDescription += $"RSVP & details: {messageLink}";
 
-            var discordEvt = await Context.Guild.CreateEventAsync(
-                name: evt.Title,
-                type: GuildScheduledEventType.External,
-                startTime: start,
-                endTime: end,
-                location: ch.Name,
-                description: eventDescription
-            );
+            // Only attempt creating the Discord Scheduled Event if the bot has Manage Events
+            var me = Context.Guild.CurrentUser;
+            if (me.GuildPermissions.ManageEvents)
+            {
+                try
+                {
+                    var discordEvt = await Context.Guild.CreateEventAsync(
+                        name: evt.Title,
+                        type: GuildScheduledEventType.External,
+                        startTime: start,
+                        endTime: end,
+                        location: ch.Name,
+                        description: eventDescription
+                    );
 
-            evt.DiscordScheduledEventId = discordEvt.Id;
+                    evt.DiscordScheduledEventId = discordEvt.Id;
+                }
+                catch (Exception ex)
+                {
+                    // Log and continue; we still have the RSVP embed
+                    Console.WriteLine($"[Events] Failed to create Discord Scheduled Event: {ex}");
+                }
+            }
+            else
+            {
+                // Inform the invoker but continue; RSVP embed is already posted
+                await FollowupAsync(
+                    ":warning: I don’t have **Manage Events** permission, so I skipped creating a Discord Scheduled Event.\n" +
+                    "An admin can enable **Manage Events** on my bot role to allow this.",
+                    ephemeral: true
+                );
+            }
 
-            // Save now that we have both message + discord event id
+            // Save now that we have message + (optional) discord event id
             await _store.SaveAsync(evt);
 
-            // Update message embed to include link to Discord Event
+            // Update message embed to include link to Discord Event (if created)
             try
             {
                 if (await ch.GetMessageAsync(msg.Id) is IUserMessage original)
@@ -96,9 +118,16 @@ namespace RS3ClanHelper.Modules
             }
             catch { /* non-fatal */ }
 
-            await FollowupAsync($":calendar_spiral: Event created: **{evt.Title}** at <t:{evt.StartsAt.ToUnixTimeSeconds()}:F> in {ch.Mention}\n" +
-                                $":link: Discord Event: https://discord.com/events/{Context.Guild.Id}/{discordEvt.Id}",
-                                ephemeral: true);
+            // Final confirmation (include link only if the native event was created)
+            var extra = evt.DiscordScheduledEventId.HasValue
+                ? $"\n:link: Discord Event: https://discord.com/events/{Context.Guild.Id}/{evt.DiscordScheduledEventId.Value}"
+                : string.Empty;
+
+            await FollowupAsync(
+                $":calendar_spiral: Event created: **{evt.Title}** at <t:{evt.StartsAt.ToUnixTimeSeconds()}:F> in {ch.Mention}{extra}",
+                ephemeral: true
+            );
+
         }
 
         [ComponentInteraction("evt:rsvp:*:*", ignoreGroupNames: true)]
