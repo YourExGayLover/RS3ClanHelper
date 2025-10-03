@@ -32,11 +32,8 @@ var services = new ServiceCollection()
     .AddSingleton<IInactiveSummaryService, InactiveSummaryService>()
     .AddSingleton<IRoleSyncService, RoleSyncService>()
     .AddSingleton<IScheduledSyncService, ScheduledSyncService>()
-    .AddSingleton<IEventStore, FileEventStore>()
-    .AddSingleton<IEventReminderService, EventReminderService>()
     .BuildServiceProvider();
 
-var eventReminders = services.GetRequiredService<IEventReminderService>();
 
 var client = services.GetRequiredService<DiscordSocketClient>();
 var interactions = services.GetRequiredService<InteractionService>();
@@ -53,7 +50,6 @@ client.Ready += async () =>
         await interactions.RegisterCommandsToGuildAsync(g.Id);
     Console.WriteLine("Slash commands registered.");
     await inactive.StartAsync(client);
-    await eventReminders.StartAsync(client);
     //foreach (var guild in client.Guilds)
     //{
     //    var selfUser = guild.CurrentUser;
