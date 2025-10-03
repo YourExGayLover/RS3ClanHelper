@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Interactions;
@@ -10,20 +9,21 @@ using RS3ClanHelper.Services;
 
 namespace RS3ClanHelper.Modules
 {
-    // Top-level group: /events
     [Group("events", "Clan events")]
     public class EventsModule : InteractionModuleBase<SocketInteractionContext>
     {
         private readonly IEventStore _store;
         public EventsModule(IEventStore store) { _store = store; }
 
-        // /events create <title> <start_time> [channel]
-        [SlashCommand("create", "Create a clan event and post RSVP buttons")]
-        [DefaultMemberPermissions(GuildPermission.ManageGuild)]
+        [SlashCommand("create", "Create a clan event (embed+RSVP) and a Discord scheduled event")]
+        [DefaultMemberPermissions(GuildPermission.ManageGuild | GuildPermission.ManageEvents)]
         public async Task Create(
             [Summary(description: "Title of the event")] string title,
             [Summary(description: "Start date/time (e.g., '2025-10-05 19:00')")] string start_time,
-            [Summary(description: "Channel to post in (default: current)")] ITextChannel? channel = null)
+            [Summary(description: "Channel to post in (default: current)")] ITextChannel? channel = null,
+            [Summary(description: "Optional description for the Discord event")] string? description = null,
+            [Summary(description: "Optional end time (e.g., '2025-10-05 21:00')")] string? end_time = null
+        )
         {
             await DeferAsync(ephemeral: true);
 
@@ -32,7 +32,6 @@ namespace RS3ClanHelper.Modules
                 await FollowupAsync("Could not parse date/time. Try formats like `2025-10-05 19:00` or `Oct 5 7pm`.", ephemeral: true);
                 return;
             }
-
             var ch = channel ?? (ITextChannel)Context.Channel;
             var evt = new ClanEvent
             {
@@ -42,6 +41,7 @@ namespace RS3ClanHelper.Modules
                 StartsAt = when.ToUniversalTime()
             };
 
+            // Build RSVP embed + buttons
             var embed = BuildEmbed(evt);
             var row = new ComponentBuilder()
                 .WithButton("RSVP ✅", $"evt:rsvp:{evt.Id}:yes", ButtonStyle.Success)
@@ -51,17 +51,60 @@ namespace RS3ClanHelper.Modules
 
             var msg = await ch.SendMessageAsync(embed: embed, components: row);
             evt.MessageId = msg.Id;
+
+            // ---- Create native Discord Scheduled Event (External) ----
+            var start = evt.StartsAt;
+            DateTimeOffset end;
+            if (!string.IsNullOrWhiteSpace(end_time) && TryParseDate(end_time, out var parsedEnd))
+            {
+                end = parsedEnd.ToUniversalTime();
+                if (end <= start) end = start.AddHours(2);
+            }
+            else
+            {
+                end = start.AddHours(2);
+            }
+
+            string eventDescription = string.IsNullOrWhiteSpace(description) ? "" : description.Trim();
+            var messageLink = $"https://discord.com/channels/{Context.Guild.Id}/{ch.Id}/{msg.Id}";
+            if (!string.IsNullOrWhiteSpace(eventDescription))
+                eventDescription += "\n\n";
+            eventDescription += $"RSVP & details: {messageLink}";
+
+            var discordEvt = await Context.Guild.CreateEventAsync(
+                name: evt.Title,
+                type: GuildScheduledEventType.External,
+                startTime: start,
+                endTime: end,
+                location: ch.Name,
+                description: eventDescription
+            );
+
+            evt.DiscordScheduledEventId = discordEvt.Id;
+
+            // Save now that we have both message + discord event id
             await _store.SaveAsync(evt);
 
-            await FollowupAsync($":calendar_spiral: Event created: **{evt.Title}** at <t:{evt.StartsAt.ToUnixTimeSeconds()}:F> in {ch.Mention}", ephemeral: true);
+            // Update message embed to include link to Discord Event
+            try
+            {
+                if (await ch.GetMessageAsync(msg.Id) is IUserMessage original)
+                {
+                    var updated = BuildEmbed(evt);
+                    await original.ModifyAsync(m => m.Embed = updated);
+                }
+            }
+            catch { /* non-fatal */ }
+
+            await FollowupAsync($":calendar_spiral: Event created: **{evt.Title}** at <t:{evt.StartsAt.ToUnixTimeSeconds()}:F> in {ch.Mention}\n" +
+                                $":link: Discord Event: https://discord.com/events/{Context.Guild.Id}/{discordEvt.Id}",
+                                ephemeral: true);
         }
 
         [ComponentInteraction("evt:rsvp:*:*", ignoreGroupNames: true)]
         public async Task RsvpHandler(string eventId, string choice)
         {
-            // IMPORTANT: acknowledge within 3s
             await DeferAsync(ephemeral: true);
-
             try
             {
                 var evt = await _store.LoadAsync(Context.Guild.Id, eventId);
@@ -71,21 +114,17 @@ namespace RS3ClanHelper.Modules
                     return;
                 }
 
-                // single state per user
                 evt.Yes.Remove(Context.User.Id);
                 evt.Maybe.Remove(Context.User.Id);
                 evt.No.Remove(Context.User.Id);
-
                 switch (choice)
                 {
                     case "yes": evt.Yes.Add(Context.User.Id); break;
                     case "maybe": evt.Maybe.Add(Context.User.Id); break;
                     case "no": evt.No.Add(Context.User.Id); break;
                 }
-
                 await _store.SaveAsync(evt);
 
-                // best-effort: refresh embed counts
                 if (evt.MessageId is ulong mid)
                 {
                     var ch = Context.Guild.GetTextChannel(evt.ChannelId);
@@ -96,7 +135,7 @@ namespace RS3ClanHelper.Modules
                             if (await ch.GetMessageAsync(mid) is IUserMessage msg)
                                 await msg.ModifyAsync(m => m.Embed = BuildEmbed(evt));
                         }
-                        catch { /* keep interaction healthy */ }
+                        catch { }
                     }
                 }
 
@@ -110,15 +149,22 @@ namespace RS3ClanHelper.Modules
 
         private static Embed BuildEmbed(ClanEvent evt)
         {
-            return new EmbedBuilder()
+            var eb = new EmbedBuilder()
                 .WithTitle($"📅 {evt.Title}")
                 .WithDescription($"Starts: <t:{evt.StartsAt.ToUnixTimeSeconds()}:F> (<t:{evt.StartsAt.ToUnixTimeSeconds()}:R>)")
                 .AddField("Yes", evt.Yes.Count.ToString(), true)
                 .AddField("Maybe", evt.Maybe.Count.ToString(), true)
                 .AddField("No", evt.No.Count.ToString(), true)
                 .WithFooter($"Event ID: {evt.Id}")
-                .WithCurrentTimestamp()
-                .Build();
+                .WithCurrentTimestamp();
+
+            if (evt.DiscordScheduledEventId.HasValue)
+            {
+                var url = $"https://discord.com/events/{evt.GuildId}/{evt.DiscordScheduledEventId.Value}";
+                eb.AddField("Discord Event", url, false);
+            }
+
+            return eb.Build();
         }
 
         private static bool TryParseDate(string input, out DateTimeOffset dto)

@@ -19,7 +19,7 @@ namespace RS3ClanHelper.Services
         public async Task StartAsync(DiscordSocketClient client)
         {
             _timer ??= new PeriodicTimer(_tick);
-            _ = Task.Run(async () =>
+            _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 while (await _timer.WaitForNextTickAsync())
                 {
@@ -34,39 +34,41 @@ namespace RS3ClanHelper.Services
                                 var ch = g.GetTextChannel(evt.ChannelId);
                                 if (ch == null) continue;
 
+                                // 24h reminder
                                 if (!evt.Reminded24h && minutesUntil <= 24*60 && minutesUntil > 24*60 - 2)
                                 {
                                     await ch.SendMessageAsync($":alarm_clock: **24h Reminder:** **{evt.Title}** starts <t:{evt.StartsAt.ToUnixTimeSeconds()}:R>.");
                                     evt.Reminded24h = true;
                                     await _store.SaveAsync(evt);
                                 }
+                                // 1h reminder
                                 if (!evt.Reminded1h && minutesUntil <= 60 && minutesUntil > 58)
                                 {
                                     await ch.SendMessageAsync($":alarm_clock: **1h Reminder:** **{evt.Title}** starts <t:{evt.StartsAt.ToUnixTimeSeconds()}:R>. RSVP if you haven't!");
                                     evt.Reminded1h = true;
                                     await _store.SaveAsync(evt);
                                 }
+                                // NEW: 15m reminder
                                 if (!evt.Reminded15m && minutesUntil <= 15 && minutesUntil > 13)
                                 {
                                     await ch.SendMessageAsync($":alarm_clock: **15m Reminder:** **{evt.Title}** starts <t:{evt.StartsAt.ToUnixTimeSeconds()}:R>. Get ready!");
                                     evt.Reminded15m = true;
                                     await _store.SaveAsync(evt);
                                 }
+                                // NEW: start announcement (0m)
                                 if (!evt.RemindedStart && minutesUntil <= 0 && minutesUntil > -2)
                                 {
                                     await ch.SendMessageAsync($":tada: **{evt.Title}** is starting now!");
                                     evt.RemindedStart = true;
                                     await _store.SaveAsync(evt);
                                 }
-
-
                             }
-                            catch { }
+                            catch { /* keep loop alive */ }
                         }
                     }
                 }
             });
-            await Task.CompletedTask;
+            await System.Threading.Tasks.Task.CompletedTask;
         }
     }
 }
