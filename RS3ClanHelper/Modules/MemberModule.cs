@@ -7,7 +7,6 @@ using Discord.WebSocket;
 using RS3ClanHelper.Services;
 using RS3ClanHelper.State;
 using RS3ClanHelper.Models;
-using RS3ClanHelper.Services;
 
 namespace RS3ClanHelper.Modules
 {
